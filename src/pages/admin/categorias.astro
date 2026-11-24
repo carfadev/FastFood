@@ -1,0 +1,66 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+---
+<AdminLayout title="Categorías">
+  <h1 class="font-display text-3xl font-extrabold">Categorías</h1>
+  <p class="text-muted text-sm">El orden define cómo aparecen en el menú.</p>
+
+  <form id="add" class="card mt-6 p-4 flex flex-wrap gap-3 items-end">
+    <div class="w-20"><label class="label">Emoji</label><input name="emoji" value="🍔" class="input text-center" maxlength="4" /></div>
+    <div class="flex-1 min-w-48"><label class="label">Nombre</label><input name="name" required class="input" placeholder="Ej: Alitas" /></div>
+    <div class="w-24"><label class="label">Orden</label><input name="sort" type="number" value="0" data-num class="input" /></div>
+    <button class="btn-primary">+ Agregar</button>
+  </form>
+
+  <div class="card mt-4 overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead><tr><th class="th w-20">Emoji</th><th class="th">Nombre</th><th class="th w-28">Orden</th><th class="th w-24">Activa</th><th class="th w-24"></th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+</AdminLayout>
+
+<script>
+  import { sb, esc, toast, check, readForm, slugify } from '../../scripts/admin.js';
+  const db = sb();
+  const rows = document.getElementById('rows');
+  let cats = [];
+
+  async function load() {
+    cats = check(await db.from('categories').select('*').order('sort').order('name'));
+    rows.innerHTML = cats.map((c) => `<tr data-id="${c.id}">
+      <td class="td"><input data-f="emoji" value="${esc(c.emoji)}" class="input !py-1.5 text-center" maxlength="4"></td>
+      <td class="td"><input data-f="name" value="${esc(c.name)}" class="input !py-1.5"></td>
+      <td class="td"><input data-f="sort" type="number" value="${c.sort}" class="input !py-1.5"></td>
+      <td class="td"><label class="switch"><input type="checkbox" data-f="is_active" ${c.is_active ? 'checked' : ''}><span></span></label></td>
+      <td class="td text-right"><button data-del class="btn-ghost btn-sm !text-danger">Eliminar</button></td>
+    </tr>`).join('') || '<tr><td class="td text-muted" colspan="5">Sin categorías</td></tr>';
+  }
+
+  rows.addEventListener('change', async (e) => {
+    const f = e.target.dataset.f; if (!f) return;
+    const id = e.target.closest('tr').dataset.id;
+    let v = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+    if (f === 'sort') v = Number(v) || 0;
+    const patch = { [f]: v };
+    if (f === 'name') patch.slug = slugify(v);
+    check(await db.from('categories').update(patch).eq('id', id));
+    toast('Guardado');
+  });
+
+  rows.addEventListener('click', async (e) => {
+    if (!e.target.closest('[data-del]')) return;
+    if (!confirm('¿Eliminar categoría? Los productos quedarán sin categoría.')) return;
+    check(await db.from('categories').delete().eq('id', e.target.closest('tr').dataset.id));
+    toast('Eliminada'); load();
+  });
+
+  document.getElementById('add').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const d = readForm(e.target);
+    check(await db.from('categories').insert({ ...d, sort: d.sort ?? 0, slug: slugify(d.name) }));
+    e.target.reset(); toast('Categoría creada'); load();
+  });
+
+  load();
+</script>

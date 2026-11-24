@@ -1,0 +1,101 @@
+---
+---
+<div id="cart" class="fixed inset-0 z-50 pointer-events-none" aria-hidden="true">
+  <div data-overlay class="absolute inset-0 bg-black/60 opacity-0 transition-opacity duration-300"></div>
+  <aside data-panel role="dialog" aria-label="Tu pedido"
+    class="absolute right-0 top-0 h-full w-full max-w-md bg-bg border-l border-line flex flex-col translate-x-full transition-transform duration-300 ease-out">
+    <div class="flex items-center justify-between px-5 h-16 border-b border-line">
+      <div>
+        <h2 class="font-display text-xl font-extrabold">Tu pedido</h2>
+        <p data-branch class="text-xs text-muted"></p>
+      </div>
+      <button data-close class="size-10 grid place-items-center rounded-full bg-surface-2 hover:bg-line" aria-label="Cerrar">✕</button>
+    </div>
+
+    <div data-list class="flex-1 overflow-y-auto px-5 py-4 space-y-3"></div>
+
+    <div data-empty class="hidden flex-1 grid place-items-center text-center px-8">
+      <div>
+        <div class="text-6xl mb-3 floaty">🍔</div>
+        <p class="font-display text-xl font-bold">Tu carrito está vacío</p>
+        <p class="text-muted text-sm mt-1">Agrega algo delicioso para empezar.</p>
+      </div>
+    </div>
+
+    <div data-footer class="border-t border-line p-5 space-y-3 bg-surface/60">
+      <div class="flex justify-between text-muted"><span>Subtotal</span><span data-subtotal class="text-ink font-semibold"></span></div>
+      <p data-min class="hidden text-xs text-warning"></p>
+      <a href="/checkout" data-go class="btn-primary w-full text-lg">Ir a pagar <span>→</span></a>
+    </div>
+  </aside>
+</div>
+
+<!-- Barra flotante móvil -->
+<button id="cart-bar" class="md:hidden fixed bottom-4 inset-x-4 z-40 btn-primary justify-between !px-5 !py-4 translate-y-32 transition-transform duration-300">
+  <span class="flex items-center gap-2"><span data-count class="grid place-items-center size-7 rounded-full bg-black/25 text-sm"></span> Ver pedido</span>
+  <span data-total class="font-bold"></span>
+</button>
+
+<script>
+  import { onCartChange, totals, setQty, money } from '../scripts/cart.js';
+  const root = document.getElementById('cart');
+  const panel = root.querySelector('[data-panel]');
+  const overlay = root.querySelector('[data-overlay]');
+  const list = root.querySelector('[data-list]');
+  const bar = document.getElementById('cart-bar');
+  const onCheckout = location.pathname.startsWith('/checkout');
+
+  const open = () => { root.classList.remove('pointer-events-none'); root.setAttribute('aria-hidden', 'false'); overlay.classList.add('opacity-100'); panel.classList.remove('translate-x-full'); document.body.style.overflow = 'hidden'; };
+  const close = () => { root.classList.add('pointer-events-none'); root.setAttribute('aria-hidden', 'true'); overlay.classList.remove('opacity-100'); panel.classList.add('translate-x-full'); document.body.style.overflow = ''; };
+  window.addEventListener('cart:open', open);
+  overlay.addEventListener('click', close);
+  root.querySelector('[data-close]').addEventListener('click', close);
+  document.addEventListener('keydown', (e) => e.key === 'Escape' && close());
+  bar.addEventListener('click', open);
+
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  list.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-q]');
+    if (!b) return;
+    setQty(b.dataset.id, Number(b.dataset.q));
+  });
+
+  onCartChange((s) => {
+    const { count, subtotal } = totals(s);
+    root.querySelector('[data-branch]').textContent = s.branch ? `📍 ${s.branch.name}` : '';
+    root.querySelector('[data-empty]').classList.toggle('hidden', count > 0);
+    root.querySelector('[data-footer]').classList.toggle('hidden', count === 0);
+    list.classList.toggle('hidden', count === 0);
+    root.querySelector('[data-subtotal]').textContent = money(subtotal);
+
+    const min = s.branch?.min_order || 0;
+    const minEl = root.querySelector('[data-min]');
+    const go = root.querySelector('[data-go]');
+    const below = subtotal < min;
+    minEl.classList.toggle('hidden', !below);
+    minEl.textContent = below ? `Pedido mínimo en esta sede: ${money(min)} (te faltan ${money(min - subtotal)})` : '';
+    go.classList.toggle('opacity-50', below);
+    go.classList.toggle('pointer-events-none', below);
+
+    list.innerHTML = s.items.map((i) => `
+      <div class="flex gap-3 items-center card p-3">
+        <div class="size-16 shrink-0 rounded-xl overflow-hidden bg-surface-2 grid place-items-center text-3xl">
+          ${i.image_url ? `<img src="${esc(i.image_url)}" alt="" class="size-full object-cover" loading="lazy">` : esc(i.emoji)}
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="font-semibold leading-tight truncate">${esc(i.name)}</p>
+          <p class="text-sm text-muted">${money(i.price)}</p>
+        </div>
+        <div class="flex items-center gap-1 bg-surface-2 rounded-full p-1">
+          <button data-q="${i.qty - 1}" data-id="${i.id}" class="size-8 rounded-full hover:bg-line" aria-label="Quitar uno">${i.qty === 1 ? '🗑' : '−'}</button>
+          <span class="w-6 text-center font-semibold">${i.qty}</span>
+          <button data-q="${i.qty + 1}" data-id="${i.id}" class="size-8 rounded-full hover:bg-line" aria-label="Agregar uno">+</button>
+        </div>
+      </div>`).join('');
+
+    bar.querySelector('[data-count]').textContent = String(count);
+    bar.querySelector('[data-total]').textContent = money(subtotal);
+    bar.classList.toggle('translate-y-32', count === 0 || onCheckout);
+  });
+</script>

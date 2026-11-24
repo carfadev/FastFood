@@ -1,0 +1,206 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { isWompiConfigured } from '../lib/wompi.js';
+---
+<Layout title="Finalizar pedido">
+  <div class="mx-auto max-w-6xl px-4 py-8 md:py-12">
+    <a id="back" href="/#sedes" class="text-sm text-muted hover:text-ink">← Seguir comprando</a>
+    <h1 class="font-display text-4xl md:text-5xl font-extrabold mt-2">Finaliza tu pedido</h1>
+    <p class="text-muted mt-1">Sin crear cuenta. Solo lo necesario para llevarte tu comida 🔥</p>
+
+    <!-- Carrito vacío -->
+    <div id="empty" class="hidden card mt-10 p-10 text-center">
+      <div class="text-6xl floaty">🍟</div>
+      <p class="font-display text-2xl font-bold mt-3">Tu carrito está vacío</p>
+      <a href="/#sedes" class="btn-primary mt-6">Ver menú</a>
+    </div>
+
+    <form id="checkout" class="hidden mt-8 grid lg:grid-cols-[1fr_400px] gap-6 items-start" novalidate>
+      <div class="space-y-6">
+        <!-- Entrega -->
+        <fieldset class="card p-6">
+          <legend class="sr-only">Tipo de entrega</legend>
+          <h2 class="font-display text-xl font-bold mb-4">1. ¿Cómo lo recibes?</h2>
+          <div class="grid grid-cols-2 gap-3" id="fulfillment">
+            <label data-opt="delivery" class="cursor-pointer">
+              <input type="radio" name="fulfillment" value="delivery" class="peer sr-only" checked />
+              <div class="rounded-2xl border-2 border-line p-4 peer-checked:border-primary peer-checked:bg-primary/10 transition">
+                <div class="text-3xl">🛵</div><p class="font-semibold mt-1">Domicilio</p><p data-fee class="text-xs text-muted"></p>
+              </div>
+            </label>
+            <label data-opt="pickup" class="cursor-pointer">
+              <input type="radio" name="fulfillment" value="pickup" class="peer sr-only" />
+              <div class="rounded-2xl border-2 border-line p-4 peer-checked:border-primary peer-checked:bg-primary/10 transition">
+                <div class="text-3xl">🏃</div><p class="font-semibold mt-1">Recoger en sede</p><p data-addr class="text-xs text-muted truncate"></p>
+              </div>
+            </label>
+          </div>
+        </fieldset>
+
+        <!-- Datos -->
+        <fieldset class="card p-6 space-y-4">
+          <h2 class="font-display text-xl font-bold">2. Tus datos</h2>
+          <div class="grid sm:grid-cols-2 gap-4">
+            <div><label class="label" for="name">Nombre</label><input id="name" name="name" class="input" autocomplete="name" required placeholder="¿A nombre de quién?" /></div>
+            <div><label class="label" for="phone">Celular</label><input id="phone" name="phone" class="input" type="tel" inputmode="tel" autocomplete="tel" required placeholder="300 123 4567" /></div>
+          </div>
+          <div id="address-block" class="space-y-4">
+            <div><label class="label" for="address">Dirección de entrega</label><input id="address" name="address" class="input" autocomplete="street-address" placeholder="Calle 123 # 45-67" /></div>
+            <div><label class="label" for="address_notes">Barrio / apto / referencia <span class="opacity-60">(opcional)</span></label><input id="address_notes" name="address_notes" class="input" placeholder="Torre 2 apto 501, portería" /></div>
+          </div>
+          <div><label class="label" for="email">Correo <span class="opacity-60">(opcional, para tu comprobante)</span></label><input id="email" name="email" type="email" class="input" autocomplete="email" placeholder="tu@correo.com" /></div>
+          <div><label class="label" for="notes">Notas para la cocina <span class="opacity-60">(opcional)</span></label><textarea id="notes" name="notes" rows="2" class="input resize-none" placeholder="Sin cebolla, salsas aparte…"></textarea></div>
+        </fieldset>
+
+        <!-- Pago -->
+        <fieldset class="card p-6">
+          <h2 class="font-display text-xl font-bold mb-4">3. Pago</h2>
+          <div class="grid sm:grid-cols-2 gap-3">
+            <label data-pay="wompi" class:list={['cursor-pointer', !isWompiConfigured && 'opacity-50 pointer-events-none']}>
+              <input type="radio" name="payment" value="wompi" class="peer sr-only" checked={isWompiConfigured} disabled={!isWompiConfigured} />
+              <div class="h-full rounded-2xl border-2 border-line p-4 peer-checked:border-primary peer-checked:bg-primary/10 transition">
+                <div class="flex items-center justify-between"><span class="text-3xl">💳</span><span class="badge bg-surface-2 text-muted">Wompi</span></div>
+                <p class="font-semibold mt-1">Pagar en línea</p>
+                <p class="text-xs text-muted">Tarjeta, PSE, Nequi, Bancolombia</p>
+                {!isWompiConfigured && <p class="text-xs text-warning mt-1">No configurado</p>}
+              </div>
+            </label>
+            <label data-pay="cash" class="cursor-pointer">
+              <input type="radio" name="payment" value="cash" class="peer sr-only" checked={!isWompiConfigured} />
+              <div class="h-full rounded-2xl border-2 border-line p-4 peer-checked:border-primary peer-checked:bg-primary/10 transition">
+                <span class="text-3xl">💵</span>
+                <p class="font-semibold mt-1">Contraentrega</p>
+                <p class="text-xs text-muted">Efectivo o datáfono al recibir</p>
+              </div>
+            </label>
+          </div>
+        </fieldset>
+      </div>
+
+      <!-- Resumen -->
+      <aside class="card p-6 lg:sticky lg:top-24 space-y-4">
+        <div class="flex items-center justify-between">
+          <h2 class="font-display text-xl font-bold">Resumen</h2>
+          <span id="branch-name" class="badge bg-surface-2 text-muted"></span>
+        </div>
+        <ul id="items" class="space-y-3 max-h-72 overflow-y-auto pr-1"></ul>
+        <div class="border-t border-line pt-4 space-y-2 text-sm">
+          <div class="flex justify-between text-muted"><span>Subtotal</span><span id="subtotal" class="text-ink"></span></div>
+          <div class="flex justify-between text-muted"><span>Domicilio</span><span id="delivery" class="text-ink"></span></div>
+          <div class="flex justify-between font-display text-2xl font-extrabold pt-2"><span>Total</span><span id="total"></span></div>
+        </div>
+        <p id="error" class="hidden text-sm text-danger bg-danger/10 border border-danger/30 rounded-xl p-3"></p>
+        <button id="submit" type="submit" class="btn-primary w-full text-lg !py-4">
+          <span data-label>Confirmar pedido</span>
+          <svg data-spin class="hidden size-5 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity=".25"/><path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" stroke-width="3"/></svg>
+        </button>
+        <p class="text-xs text-muted text-center">🔒 Pagos procesados de forma segura por Wompi. No guardamos datos de tu tarjeta.</p>
+      </aside>
+    </form>
+  </div>
+</Layout>
+
+<script>
+  import { getCart, totals, money, onCartChange, getCustomer, saveCustomer, clearItems, setQty } from '../scripts/cart.js';
+
+  const form = document.getElementById('checkout');
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  // Prefill con datos de la compra anterior
+  const saved = getCustomer();
+  for (const k of ['name', 'phone', 'email', 'address', 'address_notes']) if (saved[k]) form.elements[k].value = saved[k];
+
+  function fulfillment() { return form.elements.fulfillment.value; }
+
+  function render(s = getCart()) {
+    const { count, subtotal } = totals(s);
+    $('empty').classList.toggle('hidden', count > 0);
+    form.classList.toggle('hidden', count === 0);
+    if (!count) return;
+
+    const b = s.branch || {};
+    $('back').href = b.slug ? `/sede/${b.slug}` : '/#sedes';
+    $('branch-name').textContent = `📍 ${b.name ?? ''}`;
+    form.querySelector('[data-fee]').textContent = b.delivery_fee ? money(b.delivery_fee) : 'Gratis';
+    form.querySelector('[data-addr]').textContent = b.address ?? '';
+
+    // Opciones habilitadas por sede
+    const opt = (v) => form.querySelector(`[data-opt="${v}"]`);
+    opt('delivery').classList.toggle('hidden', b.delivery_enabled === false);
+    opt('pickup').classList.toggle('hidden', b.pickup_enabled === false);
+    if (b.delivery_enabled === false) form.elements.fulfillment.value = 'pickup';
+    form.querySelector('[data-pay="cash"]').classList.toggle('hidden', b.cash_enabled === false);
+
+    const isDelivery = fulfillment() === 'delivery';
+    $('address-block').classList.toggle('hidden', !isDelivery);
+    const fee = isDelivery ? (b.delivery_fee || 0) : 0;
+
+    $('items').innerHTML = s.items.map((i) => `
+      <li class="flex gap-3 items-center">
+        <span class="grid place-items-center size-11 rounded-xl bg-surface-2 overflow-hidden text-xl shrink-0">${i.image_url ? `<img src="${esc(i.image_url)}" class="size-full object-cover" alt="">` : esc(i.emoji)}</span>
+        <div class="flex-1 min-w-0"><p class="text-sm font-semibold truncate">${esc(i.name)}</p><p class="text-xs text-muted">${money(i.price)}</p></div>
+        <div class="flex items-center gap-1 text-sm">
+          <button type="button" data-q="${i.qty - 1}" data-id="${i.id}" class="size-7 rounded-full bg-surface-2">−</button>
+          <span class="w-5 text-center">${i.qty}</span>
+          <button type="button" data-q="${i.qty + 1}" data-id="${i.id}" class="size-7 rounded-full bg-surface-2">+</button>
+        </div>
+      </li>`).join('');
+
+    $('subtotal').textContent = money(subtotal);
+    $('delivery').textContent = isDelivery ? (fee ? money(fee) : 'Gratis') : '—';
+    $('total').textContent = money(subtotal + fee);
+
+    const pay = form.elements.payment.value;
+    form.querySelector('#submit [data-label]').textContent = pay === 'wompi' ? `Pagar ${money(subtotal + fee)}` : 'Confirmar pedido';
+  }
+
+  onCartChange(render);
+  form.addEventListener('change', () => render());
+  $('items').addEventListener('click', (e) => { const b = e.target.closest('[data-q]'); if (b) setQty(b.dataset.id, Number(b.dataset.q)); });
+
+  function showError(msg) { const el = $('error'); el.textContent = msg; el.classList.remove('hidden'); }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    $('error').classList.add('hidden');
+    const s = getCart();
+    const f = Object.fromEntries(new FormData(form));
+    const isDelivery = f.fulfillment === 'delivery';
+
+    // Validación mínima
+    if (!f.name?.trim()) return showError('Escribe tu nombre.'), form.elements.name.focus();
+    if ((f.phone || '').replace(/\D/g, '').length < 7) return showError('Escribe un celular válido.'), form.elements.phone.focus();
+    if (isDelivery && !f.address?.trim()) return showError('Escribe la dirección de entrega.'), form.elements.address.focus();
+    if (!f.payment) return showError('Elige un método de pago.');
+
+    const btn = $('submit');
+    btn.disabled = true; btn.querySelector('[data-spin]').classList.remove('hidden');
+
+    try {
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          branch_id: s.branch?.id,
+          items: s.items.map((i) => ({ id: i.id, qty: i.qty, notes: i.notes || '' })),
+          customer: { name: f.name, phone: f.phone, email: f.email },
+          fulfillment: f.fulfillment,
+          address: isDelivery ? f.address : null,
+          address_notes: isDelivery ? f.address_notes : null,
+          notes: f.notes,
+          payment_method: f.payment,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'No pudimos crear tu pedido.');
+
+      saveCustomer({ name: f.name, phone: f.phone, email: f.email, address: f.address, address_notes: f.address_notes });
+      clearItems();
+      location.href = data.checkoutUrl || `/pedido/${data.reference}`;
+    } catch (err) {
+      showError(err.message);
+      btn.disabled = false; btn.querySelector('[data-spin]').classList.add('hidden');
+    }
+  });
+</script>

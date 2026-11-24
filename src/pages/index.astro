@@ -1,0 +1,220 @@
+---
+import Layout from '../layouts/Layout.astro';
+import SetupNotice from '../components/SetupNotice.astro';
+import { isSupabaseConfigured } from '../lib/supabase.js';
+import { getBranches } from '../lib/catalog.js';
+import { money } from '../lib/format.js';
+import { isBranchWithinSchedule } from '../lib/schedule.js';
+
+let branches = [];
+let failed = !isSupabaseConfigured;
+if (!failed) {
+  try { branches = await getBranches(); } catch (e) { console.error(e); failed = true; }
+}
+Astro.response.headers.set('Cache-Control', 'public, max-age=30, stale-while-revalidate=300');
+const foods = ['🍔', '🍟', '🌭', '🥤', '🍗', '🧀', '🥓', '🍦'];
+const branchesData = JSON.stringify(branches);
+---
+<Layout>
+  <!-- HERO -->
+  <section class="relative overflow-hidden grain">
+    <div class="absolute -top-40 -right-40 size-[38rem] rounded-full bg-primary/30 blur-[120px]"></div>
+    <div class="absolute -bottom-40 -left-32 size-[30rem] rounded-full bg-accent/15 blur-[120px]"></div>
+
+    <div class="relative mx-auto max-w-6xl px-4 pt-14 pb-20 md:pt-24 md:pb-28 grid md:grid-cols-[1.2fr_1fr] gap-10 items-center">
+      <div class="rise">
+        <span class="badge bg-primary/15 text-primary border border-primary/30 !px-3 !py-1 mb-5">⚡ Pide en menos de 1 minuto · sin registro</span>
+        <h1 class="font-display font-extrabold text-5xl sm:text-6xl md:text-7xl leading-[0.95]">
+          Antojo <span class="text-primary">brutal</span>,<br/>entrega <span class="relative inline-block">rápida<svg class="absolute -bottom-2 left-0 w-full" viewBox="0 0 200 12" fill="none"><path d="M2 9C50 3 150 3 198 9" stroke="var(--accent)" stroke-width="4" stroke-linecap="round"/></svg></span>.
+        </h1>
+        <p class="mt-6 text-lg text-muted max-w-lg">Hamburguesas jugosas, salchipapas cargadas y perros como te gustan. Elige tu sede, arma tu pedido y paga seguro con Wompi o contraentrega.</p>
+        <div class="mt-8 flex flex-wrap gap-3">
+          <a href="#sedes" id="hero-cta" class="btn-primary text-lg !px-7 !py-4">Pedir ahora →</a>
+          <a href="#como" class="btn-ghost text-lg !px-7 !py-4">¿Cómo funciona?</a>
+        </div>
+        <div class="mt-10 flex gap-8 text-sm">
+          <div><p class="font-display text-3xl font-extrabold">30′</p><p class="text-muted">tiempo promedio</p></div>
+          <div><p class="font-display text-3xl font-extrabold">{branches.length || '+3'}</p><p class="text-muted">sedes</p></div>
+          <div><p class="font-display text-3xl font-extrabold">4.9★</p><p class="text-muted">calificación</p></div>
+        </div>
+      </div>
+
+      <div class="relative hidden md:grid place-items-center">
+        <div class="absolute size-80 rounded-full border border-line"></div>
+        <div class="absolute size-[26rem] rounded-full border border-line/50 border-dashed"></div>
+        <div class="text-[12rem] leading-none floaty drop-shadow-[0_30px_40px_rgba(0,0,0,.6)]">🍔</div>
+        <div class="absolute top-6 right-6 text-6xl floaty" style="animation-delay:-2s">🍟</div>
+        <div class="absolute bottom-8 left-4 text-6xl floaty" style="animation-delay:-4s">🥤</div>
+        <div class="absolute bottom-2 right-14 card px-4 py-3 text-sm shadow-2xl rotate-3">
+          <p class="text-muted text-xs">Pedido #PED-24</p><p class="font-semibold">🛵 En camino · 8 min</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Marquee -->
+    <div class="relative border-y border-line bg-surface/50 overflow-hidden py-3">
+      <div class="flex gap-10 whitespace-nowrap animate-[marquee_25s_linear_infinite] w-max text-muted font-display font-bold text-lg">
+        {[...Array(3)].flatMap(() => ['Hamburguesas', 'Salchipapas', 'Perros calientes', 'Combos', 'Bebidas', 'Postres']).map((t, i) => (
+          <span class="flex items-center gap-10">{t}<span class="text-primary">{foods[i % foods.length]}</span></span>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- SEDES -->
+  <section id="sedes" class="mx-auto max-w-6xl px-4 pt-20 scroll-mt-20">
+    <div class="flex items-end justify-between gap-4 mb-8">
+      <div>
+        <p class="text-primary font-semibold">Paso 1</p>
+        <h2 class="font-display text-4xl md:text-5xl font-extrabold">Elige tu sede</h2>
+        <p class="text-muted mt-2">El menú, precios y tiempos se ajustan a la sede que elijas.</p>
+      </div>
+    </div>
+
+    {failed ? <SetupNotice /> : (
+      <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        {branches.map((b, i) => (
+          <a href={`/sede/${b.slug}`} data-branch-link={b.slug} data-select-branch-link={b.id}
+             class="group relative card p-6 overflow-hidden hover:border-primary/60 transition rise" style={`animation-delay:${i * 80}ms`}>
+            <div class="absolute -right-10 -top-10 size-40 rounded-full bg-primary/10 group-hover:bg-primary/25 blur-2xl transition"></div>
+            <div class="relative flex items-start justify-between gap-3">
+              <div class="grid place-items-center size-12 rounded-2xl bg-surface-2 text-2xl">📍</div>
+              {b.is_open && isBranchWithinSchedule(b)
+                ? <span class="badge bg-success/15 text-success"><span class="size-1.5 rounded-full bg-success animate-pulse"></span>Abierto</span>
+                : <span class="badge bg-danger/15 text-danger">{b.is_open ? 'Fuera de horario' : 'Cerrada'}</span>}
+            </div>
+            <h3 class="relative mt-4 font-display text-2xl font-extrabold">{b.name}</h3>
+            <p class="relative text-muted text-sm">{b.address}{b.city ? ` · ${b.city}` : ''}</p>
+            {b.hours && <p class="relative text-muted text-xs mt-1">🕒 {b.hours}</p>}
+            <div class="relative mt-5 flex flex-wrap gap-2 text-xs">
+              <span class="badge bg-surface-2 text-ink">⏱ {b.eta_minutes} min</span>
+              {b.delivery_enabled && <span class="badge bg-surface-2 text-ink">🛵 {b.delivery_fee ? money(b.delivery_fee) : 'Gratis'}</span>}
+              {b.pickup_enabled && <span class="badge bg-surface-2 text-ink">🏃 Recoger</span>}
+            </div>
+            <span class="relative mt-6 inline-flex items-center gap-2 font-semibold text-primary group-hover:gap-3 transition-all">Ver menú →</span>
+          </a>
+        ))}
+      </div>
+    )}
+  </section>
+
+  <!-- CÓMO FUNCIONA -->
+  <section id="como" class="mx-auto max-w-6xl px-4 pt-24 scroll-mt-20">
+    <h2 class="font-display text-4xl md:text-5xl font-extrabold text-center">Tan fácil como <span class="text-primary">1, 2, 3</span></h2>
+    <div class="mt-10 grid md:grid-cols-3 gap-5">
+      {[
+        ['📍', 'Elige tu sede', 'La más cercana a ti. Recordamos tu elección.'],
+        ['🍔', 'Arma tu pedido', 'Un toque para agregar. Sin formularios eternos.'],
+        ['💳', 'Paga y listo', 'Wompi (tarjeta, PSE, Nequi, Bancolombia) o contraentrega.'],
+      ].map(([icon, t, d], i) => (
+        <div class="card p-7 relative overflow-hidden">
+          <span class="absolute right-4 top-2 font-display text-8xl font-extrabold text-line/60">{i + 1}</span>
+          <div class="relative text-4xl">{icon}</div>
+          <h3 class="relative mt-4 font-display text-2xl font-bold">{t}</h3>
+          <p class="relative text-muted mt-1">{d}</p>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  {branches.length > 0 && (
+    <dialog id="branch-selector" class="m-auto w-[min(760px,94vw)] max-h-[90dvh] overflow-y-auto rounded-brand bg-surface border border-line p-0 shadow-2xl">
+      <div class="p-5 sm:p-7">
+        <div class="text-center">
+          <div class="grid place-items-center size-14 rounded-2xl bg-primary/15 text-3xl mx-auto">📍</div>
+          <p class="text-primary font-semibold mt-4">Antes de pedir</p>
+          <h2 class="font-display text-3xl sm:text-4xl font-extrabold mt-1">Elige tu sede</h2>
+          <p class="text-muted mt-2">El menú y los precios pueden cambiar según la sede.</p>
+        </div>
+        <div class="mt-6 grid sm:grid-cols-2 gap-3">
+          {branches.map((b) => (
+            <button type="button" data-select-branch={b.id}
+              class="card p-5 text-left hover:border-primary/60 hover:bg-primary/5 transition group disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={!b.is_open}>
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <h3 class="font-display text-xl font-extrabold">{b.name}</h3>
+                  <p class="text-sm text-muted mt-1">{b.address}{b.city ? ` · ${b.city}` : ''}</p>
+                </div>
+                {b.is_open
+                  ? <span class="badge bg-success/15 text-success shrink-0">Abierta</span>
+                  : <span class="badge bg-danger/15 text-danger shrink-0">Cerrada</span>}
+              </div>
+              <div class="mt-4 flex items-center justify-between text-sm">
+                <span class="text-muted">⏱ {b.eta_minutes} min</span>
+                <span class="font-semibold text-primary group-hover:translate-x-1 transition-transform">Elegir →</span>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </dialog>
+  )}
+</Layout>
+
+<style is:global>
+  @keyframes marquee { to { transform: translateX(-33.333%); } }
+</style>
+
+<script define:vars={{ branchesData }} is:inline>
+  window.__BRANCHES__ = JSON.parse(branchesData);
+</script>
+
+<script>
+  import { getCart, setBranch } from '../scripts/cart.js';
+  import { isBranchWithinSchedule } from '../lib/schedule.js';
+  const cart = getCart();
+
+  document.querySelectorAll('[data-select-branch-link]').forEach((link) => {
+    link.addEventListener('click', () => {
+      const branch = window.__BRANCHES__.find((item) => item.id === link.dataset.selectBranchLink);
+      if (branch) setBranch(branch);
+    });
+  });
+
+  // Si ya eligió sede antes, el CTA lo lleva directo a su menú.
+  if (cart.branch?.slug) {
+    const cta = document.getElementById('hero-cta');
+    cta.href = `/sede/${cart.branch.slug}`;
+    cta.textContent = `Pedir en ${cart.branch.name} →`;
+  }
+
+  const dialog = document.getElementById('branch-selector');
+  if (dialog) {
+    dialog.querySelectorAll('[data-select-branch]').forEach((button) => {
+      const branch = window.__BRANCHES__.find((item) => item.id === button.dataset.selectBranch);
+      if (branch) {
+        const withinHours = branch.is_open !== false && isBranchWithinSchedule(branch);
+        button.disabled = !withinHours;
+        const status = button.querySelector('.badge');
+        if (status && !withinHours) {
+          status.textContent = 'Fuera de horario';
+          status.className = 'badge bg-danger/15 text-danger shrink-0';
+        }
+      }
+    });
+    if (cart.branch?.id) {
+      const current = dialog.querySelector(`[data-select-branch="${cart.branch.id}"]`);
+      if (current) {
+        current.classList.add('border-2', 'border-primary', 'bg-primary/10');
+      }
+    } else {
+      dialog.showModal();
+      document.body.style.overflow = 'hidden';
+    }
+  }
+
+  dialog?.addEventListener('cancel', (event) => event.preventDefault());
+  dialog?.addEventListener('close', () => {
+    document.body.style.overflow = '';
+  });
+
+  dialog?.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-select-branch]');
+    if (!button) return;
+    const branch = window.__BRANCHES__.find((item) => item.id === button.dataset.selectBranch);
+    if (!branch) return;
+    setBranch(branch);
+    location.href = `/sede/${branch.slug}`;
+  });
+</script>

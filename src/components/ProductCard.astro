@@ -1,0 +1,25 @@
+---
+import { money } from '../lib/format.js';
+const { product, emoji = '🍔', featured = false } = Astro.props;
+const payload = JSON.stringify({ id: product.id, name: product.name, price: product.price, image_url: product.image_url, emoji });
+---
+<article class:list={['group card overflow-hidden flex transition hover:border-primary/50 hover:-translate-y-0.5 duration-300',
+  featured ? 'flex-col w-72 shrink-0 snap-start' : 'flex-row sm:flex-col']}>
+  <div class:list={['relative overflow-hidden bg-gradient-to-br from-surface-2 to-line grid place-items-center',
+    featured ? 'aspect-[4/3]' : 'w-32 sm:w-full shrink-0 sm:aspect-[4/3]']}>
+    {product.image_url
+      ? <img src={product.image_url} alt={product.name} loading="lazy" decoding="async" class="absolute inset-0 size-full object-cover transition duration-500 group-hover:scale-105" />
+      : <span class="text-5xl sm:text-6xl drop-shadow-xl transition duration-500 group-hover:scale-110 group-hover:rotate-6">{emoji}</span>}
+    {product.is_featured && <span class="badge absolute top-2 left-2 bg-accent text-accent-ink">★ Top</span>}
+  </div>
+  <div class="flex-1 p-4 flex flex-col gap-1 min-w-0">
+    <h3 class="font-display text-lg font-bold leading-tight">{product.name}</h3>
+    {product.description && <p class="text-sm text-muted line-clamp-2">{product.description}</p>}
+    <div class="mt-auto pt-3 flex items-center justify-between gap-2">
+      <span class="font-display text-xl font-extrabold">{money(product.price)}</span>
+      <button data-add={payload} class="btn-primary btn-sm !rounded-full" aria-label={`Agregar ${product.name}`}>
+        <span class="text-lg leading-none">+</span><span class="hidden sm:inline">Agregar</span>
+      </button>
+    </div>
+  </div>
+</article>

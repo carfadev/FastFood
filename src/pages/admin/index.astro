@@ -1,0 +1,192 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+---
+<AdminLayout title="Pedidos">
+  <div class="flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <h1 class="font-display text-3xl font-extrabold">Pedidos</h1>
+      <p class="text-muted text-sm flex items-center gap-2"><span id="live" class="size-2 rounded-full bg-muted"></span><span id="live-txt">Conectando…</span></p>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <select id="branch" class="input !w-auto !py-2"></select>
+      <select id="range" class="input !w-auto !py-2">
+        <option value="today">Hoy</option><option value="7">Últimos 7 días</option><option value="30">Últimos 30 días</option>
+      </select>
+      <label id="open-wrap" class="hidden chip !py-2 cursor-pointer select-none">
+        <span class="switch"><input id="open" type="checkbox" /><span></span></span>
+        <span id="open-txt">Sede abierta</span>
+      </label>
+      <button id="sound" class="chip !py-2" title="Activar sonido de nuevos pedidos">🔔 Sonido</button>
+    </div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-6">
+    <div class="card p-4"><p class="text-xs text-muted">Pedidos</p><p id="k-count" class="font-display text-3xl font-extrabold">—</p></div>
+    <div class="card p-4"><p class="text-xs text-muted">Ventas</p><p id="k-sales" class="font-display text-3xl font-extrabold">—</p></div>
+    <div class="card p-4"><p class="text-xs text-muted">En curso</p><p id="k-active" class="font-display text-3xl font-extrabold text-primary">—</p></div>
+    <div class="card p-4"><p class="text-xs text-muted">Ticket promedio</p><p id="k-avg" class="font-display text-3xl font-extrabold">—</p></div>
+  </div>
+
+  <!-- Kanban -->
+  <div class="mt-6 grid lg:grid-cols-4 gap-4 items-start" id="board">
+    {[
+      ['new', '🧾 Nuevos'],
+      ['kitchen', '👨‍🍳 En cocina'],
+      ['out', '🛵 Listos / En camino'],
+      ['done', '✔ Cerrados'],
+    ].map(([k, t]) => (
+      <section class="rounded-brand bg-surface/40 border border-line p-3 min-h-40">
+        <h2 class="flex items-center justify-between px-1 pb-3 font-semibold">{t}<span data-n={k} class="badge bg-surface-2 text-muted">0</span></h2>
+        <div data-col={k} class="space-y-3"></div>
+      </section>
+    ))}
+  </div>
+</AdminLayout>
+
+<script>
+  import { sb, admin, isOwner, esc, money, timeAgo, toast, check, ding } from '../../scripts/admin.js';
+
+  const STATUS = {
+    new: 'Recibido', confirmed: 'Confirmado', preparing: 'En preparación', ready: 'Listo para recoger',
+    on_the_way: 'En camino', delivered: 'Entregado', cancelled: 'Cancelado',
+  };
+  const PAY = { pending: ['Pago pendiente', 'bg-warning/15 text-warning'], approved: ['Pagado', 'bg-success/15 text-success'],
+    declined: ['Rechazado', 'bg-danger/15 text-danger'], voided: ['Anulado', 'bg-danger/15 text-danger'], error: ['Error pago', 'bg-danger/15 text-danger'] };
+  const COL = { new: 'new', confirmed: 'kitchen', preparing: 'kitchen', ready: 'out', on_the_way: 'out', delivered: 'done', cancelled: 'done' };
+  const next = (o) => ({ new: 'confirmed', confirmed: 'preparing', preparing: o.fulfillment === 'delivery' ? 'on_the_way' : 'ready', ready: 'delivered', on_the_way: 'delivered' }[o.status]);
+
+  const db = sb();
+  const me = admin();
+  const $ = (id) => document.getElementById(id);
+  let branches = [];
+  let orders = [];
+  let soundOn = localStorage.getItem('ff_sound') === '1';
+  const setSoundUi = () => { $('sound').textContent = soundOn ? '🔔 Sonido activo' : '🔕 Sonido'; $('sound').setAttribute('aria-current', String(soundOn)); };
+  setSoundUi();
+  $('sound').onclick = () => { soundOn = !soundOn; localStorage.setItem('ff_sound', soundOn ? '1' : '0'); setSoundUi(); if (soundOn) ding(); };
+
+  async function loadBranches() {
+    branches = check(await db.from('branches').select('id,name,is_open').order('sort'));
+    const sel = $('branch');
+    if (isOwner()) sel.innerHTML = `<option value="">Todas las sedes</option>` + branches.map((b) => `<option value="${b.id}">${esc(b.name)}</option>`).join('');
+    else { sel.innerHTML = branches.filter((b) => b.id === me.branch_id).map((b) => `<option value="${b.id}">${esc(b.name)}</option>`).join(''); sel.disabled = true; }
+    sel.value = localStorage.getItem('ff_admin_branch') && isOwner() ? localStorage.getItem('ff_admin_branch') : sel.value;
+    syncOpen();
+  }
+
+  function syncOpen() {
+    const b = branches.find((x) => x.id === $('branch').value);
+    $('open-wrap').classList.toggle('hidden', !b);
+    $('open-wrap').classList.toggle('inline-flex', !!b);
+    if (b) { $('open').checked = b.is_open; $('open-txt').textContent = b.is_open ? 'Sede abierta' : 'Sede cerrada'; }
+  }
+
+  $('open').addEventListener('change', async (e) => {
+    const id = $('branch').value;
+    check(await db.from('branches').update({ is_open: e.target.checked }).eq('id', id));
+    branches.find((b) => b.id === id).is_open = e.target.checked;
+    syncOpen(); toast(e.target.checked ? 'Sede abierta: recibiendo pedidos' : 'Sede cerrada');
+  });
+
+  function since() {
+    const r = $('range').value;
+    const d = new Date();
+    if (r === 'today') d.setHours(0, 0, 0, 0); else d.setDate(d.getDate() - Number(r));
+    return d.toISOString();
+  }
+
+  async function load() {
+    let q = db.from('orders')
+      .select('*, branch:branches(name), items:order_items(name,quantity,notes)')
+      .gte('created_at', since()).order('created_at', { ascending: false }).limit(300);
+    if ($('branch').value) q = q.eq('branch_id', $('branch').value);
+    orders = check(await q);
+    render();
+  }
+
+  function card(o) {
+    const n = next(o);
+    const [pl, pc] = PAY[o.payment_status];
+    const blockPay = o.payment_method === 'wompi' && o.payment_status !== 'approved';
+    return `
+    <article class="card p-4 space-y-3 ${o.status === 'new' ? 'ring-2 ring-primary/50' : ''}" data-id="${o.id}">
+      <div class="flex items-start justify-between gap-2">
+        <div>
+          <p class="font-mono text-xs text-muted">${esc(o.reference)}</p>
+          <p class="font-semibold">${esc(o.customer_name)}</p>
+          <a href="tel:${esc(o.customer_phone)}" class="text-sm text-primary">${esc(o.customer_phone)}</a>
+        </div>
+        <div class="text-right">
+          <p class="font-display text-lg font-extrabold">${money(o.total)}</p>
+          <p class="text-xs text-muted">${timeAgo(o.created_at)}</p>
+        </div>
+      </div>
+      <div class="flex flex-wrap gap-1.5">
+        <span class="badge bg-surface-2 text-ink">${o.fulfillment === 'delivery' ? '🛵 Domicilio' : '🏃 Recoger'}</span>
+        <span class="badge bg-surface-2 text-ink">${o.payment_method === 'wompi' ? '💳 Wompi' : '💵 Contraentrega'}</span>
+        <span class="badge ${pc}">${pl}</span>
+        ${isOwner() && !$('branch').value ? `<span class="badge bg-surface-2 text-muted">📍 ${esc(o.branch?.name)}</span>` : ''}
+      </div>
+      <ul class="text-sm space-y-0.5">${o.items.map((i) => `<li><b class="text-primary">${i.quantity}×</b> ${esc(i.name)}${i.notes ? ` <span class="text-muted">· ${esc(i.notes)}</span>` : ''}</li>`).join('')}</ul>
+      ${o.address ? `<p class="text-sm text-muted">📍 ${esc(o.address)}${o.address_notes ? ` · ${esc(o.address_notes)}` : ''}</p>` : ''}
+      ${o.notes ? `<p class="text-sm bg-warning/10 text-warning rounded-lg px-3 py-2">📝 ${esc(o.notes)}</p>` : ''}
+      <div class="flex gap-2 pt-1">
+        ${n ? `<button data-set="${n}" ${blockPay && o.status === 'new' ? 'disabled title="Esperando pago"' : ''} class="btn-primary btn-sm flex-1">→ ${STATUS[n]}</button>` : `<span class="text-sm text-muted flex-1 py-2">${STATUS[o.status]}</span>`}
+        <select data-status class="input !w-auto !py-1.5 !px-2 text-xs">
+          ${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${k === o.status ? 'selected' : ''}>${v}</option>`).join('')}
+        </select>
+      </div>
+    </article>`;
+  }
+
+  function render() {
+    const cols = { new: [], kitchen: [], out: [], done: [] };
+    orders.forEach((o) => cols[COL[o.status]].push(o));
+    for (const [k, list] of Object.entries(cols)) {
+      document.querySelector(`[data-col="${k}"]`).innerHTML = list.length ? list.map(card).join('') : '<p class="text-sm text-muted text-center py-6">Sin pedidos</p>';
+      document.querySelector(`[data-n="${k}"]`).textContent = list.length;
+    }
+    const valid = orders.filter((o) => o.status !== 'cancelled' && !(o.payment_method === 'wompi' && o.payment_status !== 'approved'));
+    const sales = valid.reduce((a, o) => a + o.total, 0);
+    $('k-count').textContent = orders.length;
+    $('k-sales').textContent = money(sales);
+    $('k-active').textContent = cols.new.length + cols.kitchen.length + cols.out.length;
+    $('k-avg').textContent = valid.length ? money(sales / valid.length) : '—';
+  }
+
+  async function setStatus(id, status) {
+    if (status === 'cancelled' && !confirm('¿Cancelar este pedido?')) return render();
+    check(await db.from('orders').update({ status }).eq('id', id));
+    const o = orders.find((x) => x.id === id); if (o) o.status = status;
+    render(); toast(`Pedido → ${STATUS[status]}`);
+  }
+
+  $('board').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-set]');
+    if (b) setStatus(b.closest('[data-id]').dataset.id, b.dataset.set);
+  });
+  $('board').addEventListener('change', (e) => {
+    if (e.target.matches('[data-status]')) setStatus(e.target.closest('[data-id]').dataset.id, e.target.value);
+  });
+  $('branch').addEventListener('change', () => { localStorage.setItem('ff_admin_branch', $('branch').value); syncOpen(); load(); });
+  $('range').addEventListener('change', load);
+
+  // Tiempo real
+  let t;
+  db.channel('orders-live')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
+      const row = payload.new;
+      if ($('branch').value && row?.branch_id !== $('branch').value) return;
+      if (payload.eventType === 'INSERT') { toast(`Nuevo pedido · ${money(row.total)}`); if (soundOn) ding(); }
+      clearTimeout(t); t = setTimeout(load, 400);
+    })
+    .subscribe((s) => {
+      const ok = s === 'SUBSCRIBED';
+      $('live').className = `size-2 rounded-full ${ok ? 'bg-success animate-pulse' : 'bg-warning'}`;
+      $('live-txt').textContent = ok ? 'En vivo · los pedidos llegan solos' : 'Reconectando…';
+    });
+
+  setInterval(() => !document.hidden && render(), 60000); // refresca "hace X min"
+  (async () => { await loadBranches(); await load(); })();
+</script>

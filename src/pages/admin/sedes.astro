@@ -1,0 +1,130 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+const owner = Astro.locals.admin.role === 'owner';
+---
+<AdminLayout title="Sedes">
+  <div class="flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <h1 class="font-display text-3xl font-extrabold">Sedes</h1>
+      <p class="text-muted text-sm">Cada sede tiene su menú, horario, domicilio y pedidos.</p>
+    </div>
+    {owner && <button id="new" class="btn-primary btn-sm">+ Nueva sede</button>}
+  </div>
+
+  <div id="grid" class="mt-6 grid md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+
+  <dialog id="dlg" class="m-auto w-[min(640px,94vw)] rounded-brand bg-surface border border-line p-0 shadow-2xl">
+    <form id="form" class="p-6 space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 id="dlg-title" class="font-display text-2xl font-extrabold">Sede</h2>
+        <button type="button" data-close class="size-9 rounded-full bg-surface-2">✕</button>
+      </div>
+      <input type="hidden" name="id" />
+      <div class="grid sm:grid-cols-2 gap-3">
+        <div><label class="label">Nombre</label><input name="name" required class="input" /></div>
+        <div><label class="label">Slug (URL)</label><input name="slug" class="input" placeholder="se genera solo" /></div>
+        <div><label class="label">Ciudad</label><input name="city" class="input" /></div>
+        <div><label class="label">Dirección</label><input name="address" class="input" /></div>
+        <div><label class="label">Teléfono</label><input name="phone" class="input" /></div>
+        <div><label class="label">WhatsApp (57300…)</label><input name="whatsapp" class="input" /></div>
+        <div class="sm:col-span-2"><label class="label">Horario</label><input name="hours" class="input" placeholder="Lun–Dom · 12:00 m – 11:00 p.m." /></div>
+        <div><label class="label">Hora de apertura</label><input name="open_time" type="time" class="input" /></div>
+        <div><label class="label">Hora de cierre</label><input name="close_time" type="time" class="input" /></div>
+        <div><label class="label">Valor domicilio</label><input name="delivery_fee" type="number" min="0" step="100" data-num data-default="0" class="input" /></div>
+        <div><label class="label">Pedido mínimo</label><input name="min_order" type="number" min="0" step="100" data-num data-default="0" class="input" /></div>
+        <div><label class="label">Tiempo estimado (min)</label><input name="eta_minutes" type="number" min="5" data-num data-default="35" class="input" /></div>
+        <div><label class="label">Orden</label><input name="sort" type="number" data-num data-default="0" class="input" /></div>
+      </div>
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+        <label class="flex items-center gap-2"><span class="switch"><input type="checkbox" name="delivery_enabled" data-default="true" /><span></span></span>Domicilio</label>
+        <label class="flex items-center gap-2"><span class="switch"><input type="checkbox" name="pickup_enabled" data-default="true" /><span></span></span>Recoger</label>
+        <label class="flex items-center gap-2"><span class="switch"><input type="checkbox" name="cash_enabled" data-default="true" /><span></span></span>Contraentrega</label>
+        <label class="flex items-center gap-2"><span class="switch"><input type="checkbox" name="is_open" data-default="true" /><span></span></span>Abierta</label>
+        <label class="flex items-center gap-2"><span class="switch"><input type="checkbox" name="is_active" data-default="true" /><span></span></span>Disponible en tienda</label>
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" data-close class="btn-ghost btn-sm">Cancelar</button>
+        <button class="btn-primary btn-sm">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+</AdminLayout>
+
+<script>
+  import { sb, admin, isOwner, esc, money, toast, check, readForm, fillForm, slugify } from '../../scripts/admin.js';
+  import { isBranchWithinSchedule } from '../../lib/schedule.js';
+  const db = sb();
+  const me = admin();
+  const $ = (id) => document.getElementById(id);
+  let branches = [];
+
+  async function load() {
+    let q = db.from('branches').select('*').order('sort');
+    if (!isOwner()) q = q.eq('id', me.branch_id);
+    branches = check(await q);
+    $('grid').innerHTML = branches.map((b) => `
+      <article class="card p-5 space-y-3 ${b.is_active ? '' : 'opacity-60'}" data-id="${b.id}">
+        <div class="flex items-start justify-between gap-2">
+          <div><h3 class="font-display text-xl font-bold">${esc(b.name)}</h3><p class="text-sm text-muted">${esc(b.address)}${b.city ? ' · ' + esc(b.city) : ''}</p></div>
+          <div class="flex items-center gap-3">
+            ${isOwner() ? `
+              <label class="flex flex-col items-center gap-1 text-xs text-muted cursor-pointer" title="Disponible en tienda / desactivada">
+                <span class="switch"><input type="checkbox" data-active ${b.is_active ? 'checked' : ''}><span></span></span>
+                <span>${b.is_active ? 'Disponible' : 'Desactivada'}</span>
+              </label>` : ''}
+            <label class="flex flex-col items-center gap-1 text-xs text-muted cursor-pointer" title="Abierta / cerrada">
+              <span class="switch"><input type="checkbox" data-open ${b.is_open ? 'checked' : ''}><span></span></span>
+              <span>${b.is_open && isBranchWithinSchedule(b) ? 'Abierta' : (b.is_open ? 'Fuera de horario' : 'Cerrada')}</span>
+            </label>
+          </div>
+        </div>
+        <div class="flex flex-wrap gap-1.5 text-xs">
+          <span class="badge bg-surface-2 text-ink">🛵 ${money(b.delivery_fee)}</span>
+          <span class="badge bg-surface-2 text-ink">Mín. ${money(b.min_order)}</span>
+          <span class="badge bg-surface-2 text-ink">⏱ ${b.eta_minutes} min</span>
+          ${b.is_active ? '' : '<span class="badge bg-danger/15 text-danger">Oculta</span>'}
+        </div>
+        <div class="flex gap-2">
+          <a href="/sede/${esc(b.slug)}" target="_blank" class="btn-ghost btn-sm flex-1">Ver menú</a>
+          <button data-edit class="btn-ghost btn-sm flex-1">Editar</button>
+        </div>
+      </article>`).join('');
+  }
+
+  $('grid').addEventListener('change', async (e) => {
+    const id = e.target.closest('[data-id]').dataset.id;
+    if (e.target.matches('[data-open]')) {
+      check(await db.from('branches').update({ is_open: e.target.checked }).eq('id', id));
+      toast(e.target.checked ? 'Sede abierta' : 'Sede cerrada');
+    }
+    if (e.target.matches('[data-active]')) {
+      check(await db.from('branches').update({ is_active: e.target.checked }).eq('id', id));
+      toast(e.target.checked ? 'Sede disponible en la tienda' : 'Sede desactivada');
+      load();
+    }
+  });
+
+  const dlg = $('dlg'), form = $('form');
+  const open = (b = {}) => {
+    fillForm(form, b);
+    $('dlg-title').textContent = b.id ? 'Editar sede' : 'Nueva sede';
+    // Un manager no puede cambiar slug ni visibilidad
+    if (!isOwner()) ['slug', 'is_active'].forEach((n) => (form.elements[n].disabled = true));
+    dlg.showModal();
+  };
+  $('new')?.addEventListener('click', () => open());
+  $('grid').addEventListener('click', (e) => { if (e.target.closest('[data-edit]')) open(branches.find((b) => b.id === e.target.closest('[data-id]').dataset.id)); });
+  dlg.querySelectorAll('[data-close]').forEach((b) => (b.onclick = () => dlg.close()));
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const { id, ...row } = readForm(form);
+    if (isOwner()) row.slug = slugify(row.slug || row.name);
+    else { delete row.slug; delete row.is_active; }
+    if (id) check(await db.from('branches').update(row).eq('id', id));
+    else check(await db.from('branches').insert(row));
+    dlg.close(); toast('Sede guardada'); load();
+  });
+
+  load();
+</script>

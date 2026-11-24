@@ -1,0 +1,119 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import ProductCard from '../../components/ProductCard.astro';
+import SetupNotice from '../../components/SetupNotice.astro';
+import { isSupabaseConfigured } from '../../lib/supabase.js';
+import { getBranchBySlug, getBranchMenu } from '../../lib/catalog.js';
+import { money } from '../../lib/format.js';
+import { isBranchWithinSchedule } from '../../lib/schedule.js';
+
+if (!isSupabaseConfigured) return Astro.rewrite('/404');
+
+const branch = await getBranchBySlug(Astro.params.slug).catch(() => null);
+if (!branch) return Astro.rewrite('/404');
+
+const { categories, featured } = await getBranchMenu(branch.id);
+const emojiOf = Object.fromEntries(categories.flatMap((c) => c.products.map((p) => [p.id, c.emoji])));
+const branchIsOpen = branch.is_open && isBranchWithinSchedule(branch);
+
+// Datos mínimos de la sede para el carrito/checkout
+const branchData = JSON.stringify({
+  id: branch.id, slug: branch.slug, name: branch.name, whatsapp: branch.whatsapp,
+  delivery_fee: branch.delivery_fee, min_order: branch.min_order, eta_minutes: branch.eta_minutes,
+  delivery_enabled: branch.delivery_enabled, pickup_enabled: branch.pickup_enabled,
+  cash_enabled: branch.cash_enabled, is_open: branchIsOpen, address: branch.address,
+  open_time: branch.open_time, close_time: branch.close_time,
+});
+Astro.response.headers.set('Cache-Control', 'public, max-age=15, stale-while-revalidate=120');
+---
+<Layout title={`Menú ${branch.name}`} description={`Pide a domicilio desde ${branch.name}. ${branch.address ?? ''}`}>
+  <!-- Cabecera de sede -->
+  <section class="relative overflow-hidden border-b border-line">
+    <div class="absolute -top-32 right-0 size-[30rem] rounded-full bg-primary/20 blur-[110px]"></div>
+    <div class="relative mx-auto max-w-6xl px-4 py-10 md:py-14">
+      <a href="/#sedes" class="text-sm text-muted hover:text-ink">← Cambiar sede</a>
+      <div class="mt-3 flex flex-wrap items-end justify-between gap-6">
+        <div>
+          <h1 class="font-display text-4xl md:text-6xl font-extrabold">{branch.name}</h1>
+          <p class="text-muted mt-1">{branch.address}{branch.city ? ` · ${branch.city}` : ''}</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          {branchIsOpen
+            ? <span class="chip !text-success !border-success/40"><span class="size-2 rounded-full bg-success animate-pulse"></span>Abierto ahora</span>
+            : <span class="chip !text-danger !border-danger/40">Cerrado · puedes ver el menú</span>}
+          <span class="chip">⏱ {branch.eta_minutes} min</span>
+          {branch.delivery_enabled && <span class="chip">🛵 Domicilio {branch.delivery_fee ? money(branch.delivery_fee) : 'gratis'}</span>}
+          {branch.min_order > 0 && <span class="chip">Mínimo {money(branch.min_order)}</span>}
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {!branchIsOpen && (
+    <div class="bg-danger/10 border-b border-danger/30 text-center text-sm py-3 px-4">
+      Esta sede está fuera de horario en este momento{branch.hours ? ` · Horario: ${branch.hours}` : ''}. No es posible recibir pedidos.
+    </div>
+  )}
+
+  <!-- Navegación de categorías (sticky) -->
+  <nav id="catnav" class="sticky top-16 z-30 glass border-b border-line/60">
+    <div class="mx-auto max-w-6xl px-4 py-3 flex gap-2 overflow-x-auto no-scrollbar">
+      {featured.length > 0 && <a href="#destacados" class="chip" data-cat="destacados">⭐ Destacados</a>}
+      {categories.map((c) => <a href={`#${c.slug}`} class="chip" data-cat={c.slug}>{c.emoji} {c.name}</a>)}
+    </div>
+  </nav>
+
+  <div class="mx-auto max-w-6xl px-4">
+    {categories.length === 0 && <div class="py-20 text-center text-muted">Aún no hay productos disponibles en esta sede.</div>}
+
+    {featured.length > 0 && (
+      <section id="destacados" data-section class="pt-10 scroll-mt-36">
+        <h2 class="font-display text-3xl font-extrabold mb-5">⭐ Los más pedidos</h2>
+        <div class="flex gap-4 overflow-x-auto no-scrollbar snap-x pb-2 -mx-4 px-4">
+          {featured.map((p) => <ProductCard product={p} emoji={emojiOf[p.id]} featured />)}
+        </div>
+      </section>
+    )}
+
+    {categories.map((c) => (
+      <section id={c.slug} data-section class="pt-12 scroll-mt-36">
+        <h2 class="font-display text-3xl font-extrabold mb-5">{c.emoji} {c.name}</h2>
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {c.products.map((p) => <ProductCard product={p} emoji={c.emoji} />)}
+        </div>
+      </section>
+    ))}
+  </div>
+</Layout>
+
+<script define:vars={{ branchData }} is:inline>
+  window.__BRANCH__ = JSON.parse(branchData);
+</script>
+
+<script>
+  import { setBranch, addItem, toast } from '../../scripts/cart.js';
+
+  const branch = window.__BRANCH__;
+  setBranch(branch);
+
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-add]');
+    if (!btn) return;
+    if (!branchIsOpen) return toast('La sede está fuera de horario ahora', '🕒');
+    const p = JSON.parse(btn.dataset.add);
+    addItem(p);
+    toast(`${p.name} agregado`, p.emoji || '🍔');
+    btn.classList.remove('animate-pop'); void btn.offsetWidth; btn.classList.add('animate-pop');
+  });
+
+  // Resalta la categoría visible
+  const chips = [...document.querySelectorAll('#catnav [data-cat]')];
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach((en) => {
+      if (!en.isIntersecting) return;
+      chips.forEach((c) => c.setAttribute('aria-current', String(c.dataset.cat === en.target.id)));
+      chips.find((c) => c.dataset.cat === en.target.id)?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+    });
+  }, { rootMargin: '-40% 0px -55% 0px' });
+  document.querySelectorAll('[data-section]').forEach((s) => io.observe(s));
+</script>

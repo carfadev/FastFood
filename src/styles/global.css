@@ -1,0 +1,114 @@
+@import "tailwindcss";
+
+/* ═══════════════════════════════════════════════════════════════
+   PALETA DE COLORES — cambia SOLO estos valores para re-tematizar.
+   Todas las clases de Tailwind (bg-primary, text-ink, border-line…)
+   leen de estas variables.
+   ═══════════════════════════════════════════════════════════════ */
+:root {
+  --primary: #ff5a1f;        /* Naranja fuego: botones, acentos */
+  --primary-ink: #ffffff;    /* Texto sobre primary */
+  --accent: #ffc531;         /* Amarillo mostaza: badges, precios destacados */
+  --accent-ink: #1a1206;
+
+  --bg: #0f0d0b;             /* Fondo general */
+  --surface: #1a1714;        /* Tarjetas */
+  --surface-2: #25211d;      /* Inputs, hover */
+  --line: #332d27;           /* Bordes */
+
+  --ink: #fbf7f2;            /* Texto principal */
+  --muted: #a89d90;          /* Texto secundario */
+
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+
+  --radius: 1.25rem;
+  --font-display: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Paletas alternativas listas (descomenta una para probar)
+:root { --primary:#e11d48; --accent:#fbbf24; --bg:#0c0a0f; --surface:#17141c; --surface-2:#221e29; --line:#2f2938; }   // Rojo cereza
+:root { --primary:#16a34a; --accent:#facc15; --bg:#0a0f0b; --surface:#131a15; --surface-2:#1c261f; --line:#28352b; }   // Verde fresco
+:root { --primary:#ff5a1f; --primary-ink:#fff; --bg:#fffaf3; --surface:#ffffff; --surface-2:#f6efe6; --line:#eadfd2; --ink:#1c1410; --muted:#7a6a5c; } // Claro
+*/
+
+@theme inline {
+  --color-primary: var(--primary);
+  --color-primary-ink: var(--primary-ink);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --radius-brand: var(--radius);
+  --font-display: var(--font-display);
+  --font-sans: var(--font-body);
+}
+
+@layer base {
+  html { background: var(--bg); color: var(--ink); scroll-behavior: smooth; -webkit-tap-highlight-color: transparent; }
+  body { font-family: var(--font-body); min-height: 100dvh; }
+  h1, h2, h3, .font-display { font-family: var(--font-display); letter-spacing: -0.02em; }
+  ::selection { background: var(--primary); color: var(--primary-ink); }
+  input, select, textarea { color-scheme: dark; }
+  a, button, label, summary, [role='button'], [data-clickable] { cursor: pointer; }
+}
+
+@utility btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 font-semibold transition
+         active:scale-[.97] disabled:opacity-50 disabled:pointer-events-none cursor-pointer;
+}
+@utility btn-primary { @apply btn bg-primary text-primary-ink hover:brightness-110 shadow-[0_10px_30px_-10px_var(--primary)]; }
+@utility btn-ghost { @apply btn bg-surface-2 text-ink hover:bg-line; }
+@utility btn-sm { @apply px-3.5 py-2 text-sm; }
+@utility card { @apply bg-surface border border-line rounded-brand; }
+@utility input {
+  @apply w-full rounded-xl bg-surface-2 border border-line px-4 py-3 text-ink placeholder:text-muted/70
+         outline-none focus:border-primary focus:ring-2 focus:ring-primary/30 transition;
+}
+@utility label { @apply block text-sm font-medium text-muted mb-1.5; }
+@utility chip {
+  @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-line bg-surface px-4 py-2
+         text-sm font-medium text-muted transition hover:text-ink hover:border-primary/60;
+  &[aria-current="true"] { background: var(--primary); color: var(--primary-ink); border-color: var(--primary); }
+}
+@utility badge { @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold; }
+@utility glass { @apply bg-bg/70 backdrop-blur-xl; }
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+}
+
+.grain::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .06; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+@keyframes pop { 0% { transform: scale(1) } 40% { transform: scale(1.25) } 100% { transform: scale(1) } }
+.animate-pop { animation: pop .35s ease; }
+@keyframes rise { from { opacity: 0; transform: translateY(14px) } to { opacity: 1; transform: none } }
+.rise { animation: rise .6s cubic-bezier(.2,.7,.2,1) both; }
+@keyframes floaty { 0%,100% { transform: translateY(0) rotate(-4deg) } 50% { transform: translateY(-12px) rotate(3deg) } }
+.floaty { animation: floaty 6s ease-in-out infinite; }
+
+/* ─── Panel admin ─── */
+dialog::backdrop { background: rgb(0 0 0 / .65); backdrop-filter: blur(4px); }
+dialog { color: var(--ink); }
+@utility switch {
+  @apply relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full bg-line transition;
+  &:has(input:checked) { background: var(--success); }
+  & input { position: absolute; opacity: 0; inset: 0; cursor: pointer; margin: 0; }
+  & span { @apply pointer-events-none inline-block size-5 translate-x-0.5 rounded-full bg-white shadow transition; }
+  &:has(input:checked) span { transform: translateX(1.375rem); }
+}
+@utility th { @apply text-left text-xs font-semibold uppercase tracking-wide text-muted px-4 py-3; }
+@utility td { @apply px-4 py-3 border-t border-line; }

@@ -1,0 +1,94 @@
+---
+import { PUBLIC_BRAND_NAME } from 'astro:env/client';
+const { hideCart = false } = Astro.props;
+---
+<header class="sticky top-0 z-40 glass border-b border-line/60">
+  <div class="mx-auto max-w-6xl px-4 h-16 flex items-center gap-3">
+    <a href="/" class="flex items-center gap-2 shrink-0">
+      <span class="grid place-items-center size-9 rounded-xl bg-primary text-xl shadow-[0_8px_24px_-8px_var(--primary)]">🔥</span>
+      <span class="font-display text-xl font-extrabold tracking-tight">{PUBLIC_BRAND_NAME}</span>
+    </a>
+
+    <details id="branch-picker" class="hidden ml-2 relative max-w-[50vw] sm:max-w-none">
+      <summary id="branch-pill" class="chip !py-1.5 list-none cursor-pointer">
+        <span>📍</span><span data-name class="truncate"></span><span class="text-xs">▾</span>
+      </summary>
+      <div id="branch-options" class="absolute left-0 top-[calc(100%+0.5rem)] w-72 max-h-80 overflow-y-auto card p-2 shadow-2xl">
+        <p class="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted">Cambiar sede</p>
+      </div>
+    </details>
+
+    <div class="ml-auto flex items-center gap-2">
+      {!hideCart && (
+        <button id="cart-open" class="relative btn-primary btn-sm" aria-label="Abrir carrito">
+          <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+          <span class="hidden sm:inline">Mi pedido</span>
+          <span id="cart-count" class="hidden absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 grid place-items-center rounded-full bg-accent text-accent-ink text-xs font-bold">0</span>
+        </button>
+      )}
+    </div>
+  </div>
+</header>
+
+<script>
+  import { onCartChange, totals, setBranch } from '../scripts/cart.js';
+  import { sb } from '../lib/supabase-browser.js';
+  import { isBranchWithinSchedule } from '../lib/schedule.js';
+  const pill = document.getElementById('branch-pill');
+  const picker = document.getElementById('branch-picker');
+  const options = document.getElementById('branch-options');
+  const badge = document.getElementById('cart-count');
+  let branches = [];
+  let last = 0;
+  onCartChange((s) => {
+    if (s.branch) { picker.classList.remove('hidden'); pill.querySelector('[data-name]').textContent = s.branch.name; }
+    if (!badge) return;
+    const { count } = totals(s);
+    badge.textContent = String(count);
+    badge.classList.toggle('hidden', count === 0);
+    if (count > last) { badge.classList.remove('animate-pop'); void badge.offsetWidth; badge.classList.add('animate-pop'); }
+    last = count;
+  });
+
+  async function loadBranches() {
+    const { data, error } = await sb().from('branches')
+      .select('*')
+      .eq('is_active', true)
+      .order('sort')
+      .order('name');
+    if (error) return;
+    branches = data ?? [];
+
+    options.innerHTML = '<p class="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted">Cambiar sede</p>' +
+      branches.map((branch) => {
+        const withinHours = isBranchWithinSchedule(branch);
+        return `
+        <button type="button" data-header-branch="${branch.id}" data-slug="${branch.slug}"
+          class="w-full text-left rounded-xl px-3 py-3 hover:bg-surface-2 transition flex items-center justify-between gap-3 ${!withinHours ? 'opacity-50' : ''}"
+          ${withinHours ? '' : 'disabled'}>
+          <span class="min-w-0">
+            <span class="block font-semibold truncate">${branch.name}</span>
+            <span class="block text-xs text-muted truncate">${branch.address ?? ''}${branch.city ? ' · ' + branch.city : ''}</span>
+          </span>
+          <span class="text-xs ${withinHours ? 'text-success' : 'text-danger'}">${withinHours ? 'Abierta' : 'Fuera de horario'}</span>
+        </button>`;
+      }).join('');
+  }
+
+  loadBranches();
+
+  options.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-header-branch]');
+    if (!button) return;
+    const branch = branches.find((item) => item.id === button.dataset.headerBranch);
+    if (!branch) return;
+    setBranch(branch);
+    picker.open = false;
+    location.href = `/sede/${button.dataset.slug}`;
+  });
+
+  document.addEventListener('click', (event) => {
+    if (picker.open && !picker.contains(event.target)) picker.open = false;
+  });
+  document.getElementById('cart-open')?.addEventListener('click', () => window.dispatchEvent(new Event('cart:open')));
+</script>

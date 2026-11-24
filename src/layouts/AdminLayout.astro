@@ -1,0 +1,72 @@
+---
+import '../styles/global.css';
+import { PUBLIC_BRAND_NAME } from 'astro:env/client';
+const { title = 'Panel' } = Astro.props;
+const admin = Astro.locals.admin;
+const path = Astro.url.pathname;
+const nav = [
+  { href: '/admin', label: 'Pedidos', icon: '🧾' },
+  { href: '/admin/productos', label: 'Productos', icon: '🍔' },
+  { href: '/admin/categorias', label: 'Categorías', icon: '🏷️', owner: true },
+  { href: '/admin/sedes', label: 'Sedes', icon: '📍' },
+].filter((n) => !n.owner || admin.role === 'owner');
+const adminJson = JSON.stringify(admin);
+---
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>{title} · Admin {PUBLIC_BRAND_NAME}</title>
+    <link rel="icon" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Inter:wght@400;500;600;700&display=swap" />
+    <script is:inline define:vars={{ adminJson }}>window.__ADMIN__ = JSON.parse(adminJson);</script>
+  </head>
+  <body class="antialiased md:flex">
+    <aside class="md:w-60 md:h-dvh md:sticky md:top-0 border-b md:border-b-0 md:border-r border-line bg-surface/50 flex md:flex-col">
+      <a href="/admin" class="hidden md:flex items-center gap-2 px-5 h-16 border-b border-line">
+        <span class="grid place-items-center size-8 rounded-lg bg-primary">🔥</span>
+        <span class="font-display font-extrabold">{PUBLIC_BRAND_NAME}</span>
+      </a>
+      <nav class="flex md:flex-col gap-1 p-2 md:p-3 overflow-x-auto no-scrollbar flex-1">
+        {nav.map((n) => {
+          const active = n.href === '/admin' ? path === '/admin' || path === '/admin/' : path.startsWith(n.href);
+          return (
+            <a href={n.href} class:list={['flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium whitespace-nowrap transition',
+              active ? 'bg-primary text-primary-ink' : 'text-muted hover:bg-surface-2 hover:text-ink']}>
+              <span>{n.icon}</span>{n.label}
+            </a>
+          );
+        })}
+      </nav>
+      <div class="hidden md:block p-4 border-t border-line text-xs">
+        <p class="font-semibold text-ink truncate">{admin.full_name || admin.email}</p>
+        <p class="text-muted">{admin.role === 'owner' ? 'Administrador general' : 'Administrador de sede'}</p>
+        <div class="mt-3 flex gap-2">
+          <a href="/" target="_blank" class="btn-ghost btn-sm !px-3 flex-1">Ver tienda</a>
+          <button data-logout class="btn-ghost btn-sm !px-3">Salir</button>
+        </div>
+      </div>
+      <button data-logout class="md:hidden px-4 text-sm text-muted">Salir</button>
+    </aside>
+
+    <main class="flex-1 min-w-0 p-4 md:p-8">
+      <slot />
+    </main>
+
+    <div id="toast" class="fixed left-1/2 -translate-x-1/2 bottom-6 z-[80] flex items-center gap-2 rounded-full bg-ink text-bg px-5 py-3 font-semibold shadow-2xl transition-all duration-300 opacity-0 translate-y-4 pointer-events-none">
+      <span data-icon>✓</span><span data-msg></span>
+    </div>
+
+    <script>
+      import { sb } from '../scripts/admin.js';
+      document.querySelectorAll('[data-logout]').forEach((b) => b.addEventListener('click', async () => {
+        await sb().auth.signOut();
+        location.href = '/admin/login';
+      }));
+    </script>
+  </body>
+</html>
+
